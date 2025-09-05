@@ -2,10 +2,11 @@ package com.paypal.transactionService.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paypal.transactionService.entity.Transaction;
+import com.paypal.transactionService.kafka.kafkaEventProducer;
 import com.paypal.transactionService.repository.TransactionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +19,13 @@ public class TransactionServiceImpl implements TransactionService{
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private RestTemplate restTemplate;
+
+    @Autowired
+    private kafkaEventProducer kafkaEventProducer;
+
     @Override
     public Transaction createTransaction(Transaction request) {
 
@@ -39,7 +47,15 @@ public class TransactionServiceImpl implements TransactionService{
         Transaction saved = transactionRepository.save(transaction);
         System.out.println("🤖 saved Transaction from DB:" + saved);
 
-
+        try{
+            String eventPayLoad = objectMapper.writeValueAsString(saved);
+            String key = String.valueOf(saved.getId());
+            kafkaEventProducer.sendTransactionEvent(key, eventPayLoad);
+            System.out.println("🚀 Kafka message sent");
+        }catch (Exception e){
+            System.err.println("❌ Failed to send Kafka event: " + e.getMessage());
+            e.printStackTrace();
+        }
         return saved;
     }
 
